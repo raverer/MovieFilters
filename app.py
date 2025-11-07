@@ -59,8 +59,8 @@ def oldboy_fight_scene_effect_hd(img):
 # ===========================
 st.set_page_config(page_title="🎬 Movie Filter Lab", layout="wide")
 
-st.title("🎥 Oldboy Fight Scene Filter – AI Movie Color Lab")
-st.markdown("Upload your image and experience the **cinematic tones** inspired by Park Chan-wook’s *Oldboy (2003)*.")
+st.title("🎥 AI Movie Color Lab")
+st.markdown("Upload your image and experience the **cinematic tones** from various movies.")
 
 uploaded_file = st.file_uploader("📸 Upload Image", type=["jpg", "jpeg", "png"])
 
@@ -83,7 +83,7 @@ if uploaded_file:
     with col1:
         st.image(image, caption="Original", use_container_width=True)
     with col2:
-        st.image(filtered_img, caption="Oldboy Fight Scene Look", use_container_width=True)
+        st.image(filtered_img, caption="Oldboy Scene Look", use_container_width=True)
 
     # Download button
     img_pil = Image.fromarray(filtered_img)
@@ -93,7 +93,7 @@ if uploaded_file:
     st.download_button(
         label="💾 Download Cinematic Image",
         data=byte_im,
-        file_name="oldboy_fight_scene_result.jpg",
+        file_name="oldboy_look.jpg",
         mime="image/jpeg"
     )
 
