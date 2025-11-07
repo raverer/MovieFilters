@@ -1,5 +1,3 @@
-!pip install opencv-python pillow numpy matplotlib --quiet
-
 import numpy as np
 import cv2
 from PIL import Image
