@@ -1,23 +1,21 @@
+import streamlit as st
 import numpy as np
 import cv2
 from PIL import Image
-import matplotlib.pyplot as plt
-from google.colab import files
+import io
 
-# ==========================================
-# 🎞️ Oldboy Fight Scene Filter (True HD v4.0)
-# ==========================================
+# ===========================
+# 🎬 Oldboy Filter Definition
+# ===========================
 def apply_cinetone_curve(img, contrast=1.15, pivot=0.45):
-    """Apply a smooth S-curve contrast boost for cinematic tone mapping."""
     img = np.clip(img, 0, 1)
     return np.clip((img - pivot) * contrast + pivot, 0, 1)
 
 def oldboy_fight_scene_effect_hd(img):
     img = img.astype(np.float32) / 255.0
 
-    # --- Step 1: Split-tone (cool shadows / warm highlights) ---
-    shadow_tint = np.array([0.00, 0.04, 0.12], dtype=np.float32)
-    highlight_tint = np.array([0.10, 0.05, -0.02], dtype=np.float32)
+    shadow_tint = np.array([0.00, 0.04, 0.12])
+    highlight_tint = np.array([0.10, 0.05, -0.02])
 
     luminance = cv2.cvtColor((img * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
     luminance = np.expand_dims(luminance, 2)
@@ -26,25 +24,22 @@ def oldboy_fight_scene_effect_hd(img):
 
     img += shadow_tint * shadow_mask
     img += highlight_tint * highlight_mask
-
-    # --- Step 2: Apply cinematic tone curve ---
     img = apply_cinetone_curve(img, contrast=1.25)
 
-    # --- Step 3: Slightly crushed blacks and teal-mids ---
-    img[..., 2] *= 0.95   # reduce reds
-    img[..., 1] *= 1.05   # enhance greens
-    img[..., 0] *= 1.08   # cooler blues
+    img[..., 2] *= 0.95
+    img[..., 1] *= 1.05
+    img[..., 0] *= 1.08
     img = np.clip(img, 0, 1)
 
-    # --- Step 4: Film grain using luminance modulation ---
+    # Film grain
     h, w, _ = img.shape
-    grain_strength = 0.015  # subtle filmic grain
+    grain_strength = 0.015
     noise = np.random.normal(0, 1, (h, w, 1))
     grain = (noise - noise.min()) / (noise.max() - noise.min())
     grain = (grain - 0.5) * 2.0
     img = np.clip(img + grain * grain_strength * (0.3 + luminance), 0, 1)
 
-    # --- Step 5: Vignette ---
+    # Vignette
     kernel_x = cv2.getGaussianKernel(w, w / 1.8)
     kernel_y = cv2.getGaussianKernel(h, h / 1.8)
     vignette = kernel_y * kernel_x.T
@@ -52,46 +47,55 @@ def oldboy_fight_scene_effect_hd(img):
     vignette = np.dstack([vignette] * 3)
     img *= (0.7 + 0.3 * vignette)
 
-    # --- Step 6: Adaptive sharpening ---
+    # Sharpen
     img_blur = cv2.GaussianBlur(img, (0, 0), sigmaX=1.2)
     sharp = np.clip(img + (img - img_blur) * 0.8, 0, 1)
 
     return (sharp * 255).astype(np.uint8)
 
-# ==========================================
-# 📏 Resize helper
-# ==========================================
-def resize_if_needed(img, max_dim=4000):
-    h, w = img.shape[:2]
-    if max(h, w) > max_dim:
-        scale = max_dim / max(h, w)
+
+# ===========================
+# 🧠 Streamlit UI
+# ===========================
+st.set_page_config(page_title="🎬 Movie Filter Lab", layout="wide")
+
+st.title("🎥 Oldboy Fight Scene Filter – AI Movie Color Lab")
+st.markdown("Upload your image and experience the **cinematic tones** inspired by Park Chan-wook’s *Oldboy (2003)*.")
+
+uploaded_file = st.file_uploader("📸 Upload Image", type=["jpg", "jpeg", "png"])
+
+if uploaded_file:
+    # Load image
+    image = np.array(Image.open(uploaded_file).convert("RGB"))
+    h, w = image.shape[:2]
+    if max(h, w) > 4000:
+        scale = 4000 / max(h, w)
         new_size = (int(w * scale), int(h * scale))
-        img = cv2.resize(img, new_size, interpolation=cv2.INTER_AREA)
-        print(f"🔄 Resized to {img.shape[1]}x{img.shape[0]}")
-    else:
-        print(f"✅ Using full native resolution ({w}x{h})")
-    return img
+        image = cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
+        st.info(f"Image resized to {image.shape[1]}x{image.shape[0]} for optimal processing.")
 
-# ==========================================
-# 🖼️ Upload + Apply Filter
-# ==========================================
-uploaded = files.upload()
-img_path = list(uploaded.keys())[0]
-img = np.array(Image.open(img_path).convert("RGB"))
-img = resize_if_needed(img, max_dim=4000)
+    # Apply filter
+    with st.spinner("🎞️ Applying Oldboy cinematic tone..."):
+        filtered_img = oldboy_fight_scene_effect_hd(image)
 
-filtered_img = oldboy_fight_scene_effect_hd(img)
+    # Display results
+    col1, col2 = st.columns(2)
+    with col1:
+        st.image(image, caption="Original", use_container_width=True)
+    with col2:
+        st.image(filtered_img, caption="Oldboy Fight Scene Look", use_container_width=True)
 
-# ==========================================
-# 💾 Save + Display
-# ==========================================
-output_path = "oldboy_fight_scene_hd_output.jpg"
-Image.fromarray(filtered_img).save(output_path, quality=98)
+    # Download button
+    img_pil = Image.fromarray(filtered_img)
+    buf = io.BytesIO()
+    img_pil.save(buf, format="JPEG", quality=98)
+    byte_im = buf.getvalue()
+    st.download_button(
+        label="💾 Download Cinematic Image",
+        data=byte_im,
+        file_name="oldboy_fight_scene_result.jpg",
+        mime="image/jpeg"
+    )
 
-plt.figure(figsize=(14, 10))
-plt.imshow(filtered_img)
-plt.axis("off")
-plt.title("🎬 Oldboy Fight Scene Filter – True HD Output (v4.0)", fontsize=14)
-plt.show()
-
-print(f"✅ Saved HD output: {output_path}")
+else:
+    st.info("👆 Upload an image to apply the filter.")
