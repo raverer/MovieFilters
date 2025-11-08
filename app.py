@@ -136,7 +136,7 @@ def load_base_preview(path="preview/base.jpg", resize_to=(500, 350)):
 def generate_previews(base_image):
     previews = {}
     previews["Oldboy"] = oldboy_fight_scene_effect_hd(np.array(base_image))
-    previews["Dune Teal-Orange"] = dune_teal_orange_filter(base_image)
+    previews["Dune(2021)"] = dune_teal_orange_filter(base_image)
     return previews
 
 # -----------------------
