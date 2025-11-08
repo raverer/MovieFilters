@@ -16,7 +16,7 @@ st.markdown(
     /* App-wide aesthetic styles */
     body {background-color: #0e1117;}
     .stApp {background-color: #0e1117;}
-    h1, h2, h3, h4, h5, h6, p, span {color: #f1f1f1 !important;}
+    h1, h2, h3, h4, h5, h6, p, span {color: #404040 !important;}
     .thumbnail {
         border-radius: 18px;
         transition: all 0.3s ease-in-out;
