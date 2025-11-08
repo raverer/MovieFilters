@@ -43,9 +43,18 @@ def apply_lut(image, lut):
 # -----------------------
 @st.cache_resource
 def generate_previews(luts, base_image_path="preview/base.jpg"):
+    import requests
+    from io import BytesIO
+
+    # If no local file exists, use a fallback placeholder image
     if not os.path.exists(base_image_path):
-        raise FileNotFoundError("Missing preview/base.png — add a neutral sample image!")
-    base = Image.open(base_image_path).convert("RGB").resize((350, 250))
+        st.warning("No preview/base.jpg found — using placeholder image.")
+        url = "https://placehold.co/800x600/888/FFF?text=Movie+Preview"
+        base = Image.open(BytesIO(requests.get(url).content)).convert("RGB")
+    else:
+        base = Image.open(base_image_path).convert("RGB")
+
+    base = base.resize((350, 250))
     previews = {}
     for name, lut in luts.items():
         previews[name] = apply_lut(base, lut)
