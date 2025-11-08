@@ -44,7 +44,7 @@ def apply_lut(image, lut):
 @st.cache_resource
 def generate_previews(luts, base_image_path="preview/base.jpg"):
     if not os.path.exists(base_image_path):
-        raise FileNotFoundError("Missing preview/base.jpg — add a neutral sample image!")
+        raise FileNotFoundError("Missing preview/base.png — add a neutral sample image!")
     base = Image.open(base_image_path).convert("RGB").resize((350, 250))
     previews = {}
     for name, lut in luts.items():
