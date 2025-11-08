@@ -1,52 +1,17 @@
 # ==========================================
-# 🎥 MOVIE FILTER STUDIO (Oldboy + Dune)
+# 🎥 MOVIE FILTER STUDIO (Oldboy + Dune Teal-Orange)
 # ==========================================
 import streamlit as st
 import numpy as np
 from PIL import Image
 import cv2
-import os
-from sklearn.cluster import KMeans
+import io
 
 st.set_page_config(page_title="🎬 Movie Filter Studio", layout="wide")
 
-# -----------------------
-# 🎞 LUT loading utilities
-# -----------------------
-@st.cache_resource
-def load_cube_file(path):
-    lut = []
-    with open(path, "r") as f:
-        for line in f:
-            if line.startswith("#") or "LUT_3D_SIZE" in line:
-                continue
-            parts = line.strip().split()
-            if len(parts) == 3:
-                lut.append([float(x) for x in parts])
-    size = int(round(len(lut) ** (1/3)))
-    return np.array(lut).reshape((size, size, size, 3))
-
-@st.cache_resource
-def load_all_luts(lut_folder="luts"):
-    luts = {}
-    if not os.path.exists(lut_folder):
-        os.makedirs(lut_folder)
-    for file in os.listdir(lut_folder):
-        if file.endswith(".cube"):
-            name = file.replace(".cube", "")
-            luts[name] = load_cube_file(os.path.join(lut_folder, file))
-    return luts
-
-def apply_lut(image, lut):
-    img = np.array(image).astype(np.float32) / 255.0
-    img = np.clip(img, 0, 1)
-    idx = np.clip((img * (lut.shape[0]-1)).astype(int), 0, lut.shape[0]-1)
-    result = lut[idx[...,0], idx[...,1], idx[...,2]]
-    return (result * 255).astype(np.uint8)
-
-# -----------------------
-# 🎬 Oldboy Filter Definition
-# -----------------------
+# ==========================================
+# 🎬 OLD BOY FILTER
+# ==========================================
 def apply_cinetone_curve(img, contrast=1.15, pivot=0.45):
     img = np.clip(img, 0, 1)
     return np.clip((img - pivot) * contrast + pivot, 0, 1)
@@ -66,6 +31,7 @@ def oldboy_fight_scene_effect_hd(img):
     img[..., 1] *= 1.05
     img[..., 0] *= 1.08
     img = np.clip(img, 0, 1)
+
     # Film grain
     h, w, _ = img.shape
     grain_strength = 0.015
@@ -73,6 +39,7 @@ def oldboy_fight_scene_effect_hd(img):
     grain = (noise - noise.min()) / (noise.max() - noise.min())
     grain = (grain - 0.5) * 2.0
     img = np.clip(img + grain * grain_strength * (0.3 + luminance), 0, 1)
+
     # Vignette
     kernel_x = cv2.getGaussianKernel(w, w / 1.8)
     kernel_y = cv2.getGaussianKernel(h, h / 1.8)
@@ -80,112 +47,110 @@ def oldboy_fight_scene_effect_hd(img):
     vignette = vignette / vignette.max()
     vignette = np.dstack([vignette] * 3)
     img *= (0.7 + 0.3 * vignette)
+
     # Sharpen
     img_blur = cv2.GaussianBlur(img, (0, 0), sigmaX=1.2)
     sharp = np.clip(img + (img - img_blur) * 0.8, 0, 1)
     return (sharp * 255).astype(np.uint8)
 
-# -----------------------
-# 🟢 Dune cinematic filter
-# -----------------------
-def apply_dune_filter(image):
+
+# ==========================================
+# 🟠 DUNE TEAL-ORANGE FILTER
+# ==========================================
+def dune_teal_orange_filter(image):
     img = np.array(image).astype(np.float32) / 255.0
-    orange_tone = np.array([1.15, 1.05, 0.85])
-    img = np.clip(img * orange_tone, 0, 1)
-    shadows = np.minimum(img, 0.5)
-    img = img - shadows * 0.08 * np.array([0.1, -0.1, -0.2])
-    img = np.clip((img - 0.1) * 1.2 + 0.05, 0, 1)
-    rows, cols = img.shape[:2]
-    X_kernel = cv2.getGaussianKernel(cols, 250)
-    Y_kernel = cv2.getGaussianKernel(rows, 250)
-    kernel = Y_kernel * X_kernel.T
-    mask = kernel / kernel.max()
-    vignette = img * (0.5 * mask[..., np.newaxis] + 0.5)
-    vignette = np.clip(vignette * 1.1, 0, 1)
-    vignette[:, :, 0] *= 1.05
-    vignette[:, :, 2] *= 0.95
-    return (vignette * 255).astype(np.uint8)
 
-# -----------------------
-# Generate previews
-# -----------------------
-@st.cache_resource
-def generate_previews(luts, base_image_path="preview/base.jpg"):
-    import requests
-    from io import BytesIO
-    if not os.path.exists(base_image_path):
-        url = "https://picsum.photos/800/600"
-        base = Image.open(BytesIO(requests.get(url).content)).convert("RGB")
-    else:
-        base = Image.open(base_image_path).convert("RGB")
-    base = base.resize((400, 280))
-    previews = {}
-    for name, lut in luts.items():
-        previews[name] = apply_lut(base, lut)
-    previews["oldboy"] = oldboy_fight_scene_effect_hd(np.array(base))
-    previews["dune"] = apply_dune_filter(base)
-    return previews
+    # 1️⃣ Create a cinematic contrast curve
+    img = np.power(img, 0.95)  # preserve shadow depth
 
-# -----------------------
-# Mood analyzer
-# -----------------------
-def analyze_image_mood(image):
-    img = np.array(image.resize((100, 100))) / 255.0
-    flat = img.reshape(-1, 3)
-    kmeans = KMeans(n_clusters=3, n_init=5).fit(flat)
-    dominant = kmeans.cluster_centers_.mean(axis=0)
-    r, g, b = dominant
-    if r > 0.6 and g < 0.4:
-        return "warm & dramatic", "oldboy"
-    elif b > 0.55:
-        return "cool & sci-fi", "dune"
-    elif r > 0.5 and g > 0.5:
-        return "vibrant & playful", "wes_anderson"
-    else:
-        return "moody & nostalgic", "wongkarwai"
+    # 2️⃣ Push shadows toward teal
+    shadows = np.clip(1.0 - (img * 2.2), 0, 1)
+    teal_tint = np.array([0.0, 0.1, 0.25])
+    img += teal_tint * shadows * 0.35
 
-# -----------------------
-# Streamlit UI
-# -----------------------
-st.title("🎥 Movie Filter Studio")
-st.caption("Apply cinematic looks inspired by legendary films.")
+    # 3️⃣ Push highlights toward orange
+    highlights = np.clip((img - 0.5) * 2.0, 0, 1)
+    orange_tint = np.array([0.25, 0.15, -0.05])
+    img += orange_tint * highlights * 0.55
 
-luts = load_all_luts()
-previews = generate_previews(luts)
+    # 4️⃣ Adjust color balance and contrast
+    img = apply_cinetone_curve(img, contrast=1.35, pivot=0.45)
+    img = np.clip(img * np.array([1.05, 1.0, 0.95]), 0, 1)
+
+    # 5️⃣ Add clarity and preserve crisp details
+    sharp = cv2.GaussianBlur(img, (0, 0), sigmaX=0.8)
+    clarity = np.clip(img + (img - sharp) * 0.9, 0, 1)
+
+    # 6️⃣ Film grain + subtle vignette
+    h, w, _ = clarity.shape
+    noise = np.random.normal(0, 1, (h, w, 1))
+    grain = (noise - noise.min()) / (noise.max() - noise.min())
+    clarity = np.clip(clarity + grain * 0.01, 0, 1)
+
+    # vignette
+    kernel_x = cv2.getGaussianKernel(w, w / 2.0)
+    kernel_y = cv2.getGaussianKernel(h, h / 2.0)
+    vignette = kernel_y * kernel_x.T
+    vignette = vignette / vignette.max()
+    vignette = np.dstack([vignette] * 3)
+    clarity *= (0.8 + 0.2 * vignette)
+
+    # Preserve tonal richness
+    final = np.clip(clarity, 0, 1)
+    return (final * 255).astype(np.uint8)
+
+
+# ==========================================
+# 🧠 Streamlit Interface
+# ==========================================
+st.title("🎞️ Movie Filter Studio")
+st.caption("Cinematic filters inspired by *Oldboy* and *Dune* — sharp, textured, and filmic.")
 
 uploaded_file = st.file_uploader("📸 Upload an image", type=["jpg", "jpeg", "png"])
 
-# 🎞 Preview gallery
-st.subheader("🎞 Choose Your Cinematic Look")
-cols = st.columns(3)
-for i, (name, img) in enumerate(previews.items()):
-    with cols[i % 3]:
-        st.image(img, caption=name.title(), use_container_width=True)
-        if st.button(f"Apply {name.title()}"):
-            st.session_state["selected_filter"] = name
+filter_choice = st.radio(
+    "🎬 Choose a cinematic tone",
+    ["Oldboy", "Dune Teal-Orange"],
+    horizontal=True
+)
 
 if uploaded_file:
-    image = Image.open(uploaded_file).convert("RGB")
-    mood, suggestion = analyze_image_mood(image)
-    st.info(f"AI detects this photo is **{mood}**, suggested filter: **{suggestion}** 🎬")
+    image = np.array(Image.open(uploaded_file).convert("RGB"))
 
+    # Resize large images to 4000px max
+    h, w = image.shape[:2]
+    if max(h, w) > 4000:
+        scale = 4000 / max(h, w)
+        new_size = (int(w * scale), int(h * scale))
+        image = cv2.resize(image, new_size, interpolation=cv2.INTER_AREA)
+        st.info(f"Image resized to {image.shape[1]}x{image.shape[0]} for performance optimization.")
+
+    # Apply selected filter
+    with st.spinner(f"🎥 Applying {filter_choice} cinematic tone..."):
+        if filter_choice == "Oldboy":
+            filtered_img = oldboy_fight_scene_effect_hd(image)
+        else:
+            filtered_img = dune_teal_orange_filter(image)
+
+    # Display Results
     col1, col2 = st.columns(2)
     with col1:
         st.image(image, caption="Original", use_container_width=True)
     with col2:
-        selected_filter = st.session_state.get("selected_filter", suggestion)
-        if selected_filter == "oldboy":
-            result = oldboy_fight_scene_effect_hd(np.array(image))
-        elif selected_filter == "dune":
-            result = apply_dune_filter(image)
-        else:
-            result = apply_lut(image, luts[selected_filter])
-        st.image(result, caption=f"Applied: {selected_filter}", use_container_width=True)
-        st.download_button(
-            "📥 Download Image",
-            data=Image.fromarray(result).tobytes(),
-            file_name=f"{selected_filter}_filtered.png",
-            mime="image/png"
-        )
+        st.image(filtered_img, caption=f"{filter_choice} Look", use_container_width=True)
+
+    # Download Button
+    img_pil = Image.fromarray(filtered_img)
+    buf = io.BytesIO()
+    img_pil.save(buf, format="JPEG", quality=98)
+    byte_im = buf.getvalue()
+
+    st.download_button(
+        label="💾 Download Cinematic Image",
+        data=byte_im,
+        file_name=f"{filter_choice.lower().replace(' ', '_')}.jpg",
+        mime="image/jpeg"
+    )
+
 else:
-    st.info("Upload an image to get AI-suggested cinematic filters.")
+    st.info("👆 Upload your image to apply the cinematic filter.")
