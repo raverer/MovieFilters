@@ -2,6 +2,7 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import os
+from sklearn.cluster import KMeans
 
 st.set_page_config(page_title="🎬 Movie Filter Studio", layout="wide")
 
@@ -38,47 +39,81 @@ def apply_lut(image, lut):
     return (result * 255).astype(np.uint8)
 
 # -----------------------
+# Generate filter previews
+# -----------------------
+@st.cache_resource
+def generate_previews(luts, base_image_path="preview/base.jpg"):
+    if not os.path.exists(base_image_path):
+        raise FileNotFoundError("Missing preview/base.jpg — add a neutral sample image!")
+    base = Image.open(base_image_path).convert("RGB").resize((350, 250))
+    previews = {}
+    for name, lut in luts.items():
+        previews[name] = apply_lut(base, lut)
+    return previews
+
+# -----------------------
+# AI mood analyzer
+# -----------------------
+def analyze_image_mood(image):
+    img = np.array(image.resize((100, 100))) / 255.0
+    flat = img.reshape(-1, 3)
+    kmeans = KMeans(n_clusters=3, n_init=5).fit(flat)
+    dominant = kmeans.cluster_centers_.mean(axis=0)
+    r, g, b = dominant
+
+    # heuristic for mood classification
+    if r > 0.6 and g < 0.4:
+        return "warm & dramatic", "oldboy"
+    elif b > 0.55:
+        return "cool & sci-fi", "dune"
+    elif r > 0.5 and g > 0.5:
+        return "vibrant & playful", "wes_anderson"
+    else:
+        return "moody & nostalgic", "wongkarwai"
+
+# -----------------------
 # Streamlit UI
 # -----------------------
 st.title("🎥 Movie Filter Studio")
-st.caption("Apply cinematic looks inspired by iconic movies.")
+st.caption("Apply cinematic looks inspired by legendary films.")
 
-# Load LUTs
 luts = load_all_luts()
-filter_names = list(luts.keys())
+previews = generate_previews(luts)
 
-# Layout
 uploaded_file = st.file_uploader("📸 Upload an image", type=["jpg", "jpeg", "png"])
 
-col1, col2 = st.columns([1, 2])
+# Big preview gallery
+st.subheader("🎞 Choose Your Cinematic Look")
+cols = st.columns(3)
+for i, (name, img) in enumerate(previews.items()):
+    with cols[i % 3]:
+        st.image(img, caption=name, use_container_width=True)
+        if st.button(f"Apply {name}"):
+            st.session_state["selected_filter"] = name
 
-with col1:
-    st.subheader("🎞 Choose Filter")
-    selected_filter = st.radio("Movie Look", filter_names)
+# AI suggestion
+if uploaded_file:
+    st.markdown("### 🤖 AI Filter Suggestion")
+    image = Image.open(uploaded_file).convert("RGB")
+    mood, suggestion = analyze_image_mood(image)
+    st.info(f"AI detects this photo is **{mood}**, suggested filter: **{suggestion}** 🎬")
 
-    st.markdown("**Preview Samples:**")
-    preview_cols = st.columns(3)
-    for i, name in enumerate(filter_names[:3]):
-        with preview_cols[i]:
-            st.image(f"https://placehold.co/150x100?text={name}", caption=name)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.image(image, caption="Original", use_container_width=True)
+    with col2:
+        if "selected_filter" in st.session_state:
+            selected_filter = st.session_state["selected_filter"]
+        else:
+            selected_filter = suggestion
+        result = apply_lut(image, luts[selected_filter])
+        st.image(result, caption=f"Applied: {selected_filter}", use_container_width=True)
 
-with col2:
-    if uploaded_file:
-        image = Image.open(uploaded_file).convert("RGB")
-        st.image(image, caption="Original Image", use_container_width=True)
-
-        if st.button("✨ Apply Filter"):
-            lut = luts[selected_filter]
-            result = apply_lut(image, lut)
-            st.image(result, caption=f"Filtered: {selected_filter}", use_container_width=True)
-            st.download_button(
-                "📥 Download Image",
-                data=Image.fromarray(result).tobytes(),
-                file_name=f"{selected_filter}_filtered.png",
-                mime="image/png"
-            )
-    else:
-        st.info("Upload an image to start filtering.")
-
-st.markdown("---")
-st.caption("© 2025 Movie Filter Studio — Cinematic Looks for Everyone.")
+        st.download_button(
+            "📥 Download Image",
+            data=Image.fromarray(result).tobytes(),
+            file_name=f"{selected_filter}_filtered.png",
+            mime="image/png"
+        )
+else:
+    st.info("Upload an image to get AI-suggested cinematic filters.")
