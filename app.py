@@ -10,6 +10,33 @@ from io import BytesIO
 # Streamlit page setup
 # -----------------------
 st.set_page_config(page_title="🎬 Movie Filter Studio", layout="wide")
+st.markdown(
+    """
+    <style>
+    /* App-wide aesthetic styles */
+    body {background-color: #0e1117;}
+    .stApp {background-color: #0e1117;}
+    h1, h2, h3, h4, h5, h6, p, span {color: #f1f1f1 !important;}
+    .thumbnail {
+        border-radius: 18px;
+        transition: all 0.3s ease-in-out;
+        box-shadow: 0px 0px 15px rgba(255,255,255,0.08);
+    }
+    .thumbnail:hover {
+        transform: scale(1.05);
+        box-shadow: 0px 0px 25px rgba(255,255,255,0.2);
+        border: 2px solid #ff5c5c;
+    }
+    .filter-name {
+        text-align: center;
+        font-weight: 600;
+        margin-top: 0.5rem;
+        color: #f9f9f9;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # -----------------------
 # LUT loading utilities
@@ -44,33 +71,26 @@ def apply_lut(image, lut):
     return (result * 255).astype(np.uint8)
 
 # -----------------------
-# Generate filter previews (HD-safe + fallback)
+# Generate filter previews (HD-safe)
 # -----------------------
 @st.cache_resource
-def generate_previews(luts, base_image_path="preview/base.png"):
-    # ✅ Prefer local neutral image for LUT previews
+def generate_previews(luts, base_image_path="preview/base.jpg"):
     if os.path.exists(base_image_path):
         base = Image.open(base_image_path).convert("RGB")
     else:
-        # ✅ Fallback to a reliable Unsplash neutral background
-        st.warning("⚠️ No preview/base.jpg found — using fallback neutral image.")
         url = "https://images.unsplash.com/photo-1612690119274-8819a81c13a2?auto=format&fit=crop&w=1200&q=80"
-        try:
-            response = requests.get(url, stream=True)
-            response.raise_for_status()
-            base = Image.open(BytesIO(response.content)).convert("RGB")
-        except Exception:
-            st.error("❌ Could not load fallback image. Please add preview/base.jpg.")
-            raise
+        st.warning("⚠️ No preview/base.jpg found — using fallback neutral image.")
+        response = requests.get(url)
+        base = Image.open(BytesIO(response.content)).convert("RGB")
 
-    base = base.resize((500, 350))  # HD-size previews
+    base = base.resize((500, 350))
     previews = {}
     for name, lut in luts.items():
         previews[name] = apply_lut(base, lut)
     return previews
 
 # -----------------------
-# AI mood analyzer (suggest filter)
+# AI mood analyzer
 # -----------------------
 def analyze_image_mood(image):
     img = np.array(image.resize((100, 100))) / 255.0
@@ -79,7 +99,6 @@ def analyze_image_mood(image):
     dominant = kmeans.cluster_centers_.mean(axis=0)
     r, g, b = dominant
 
-    # heuristic for mood classification
     if r > 0.6 and g < 0.4:
         return "warm & dramatic", "oldboy"
     elif b > 0.55:
@@ -93,7 +112,7 @@ def analyze_image_mood(image):
 # Streamlit UI
 # -----------------------
 st.title("🎥 Movie Filter Studio")
-st.caption("Apply cinematic looks inspired by legendary films.")
+st.caption("Transform your photos with cinematic filters inspired by iconic films.")
 
 luts = load_all_luts()
 previews = generate_previews(luts)
@@ -101,18 +120,23 @@ previews = generate_previews(luts)
 uploaded_file = st.file_uploader("📸 Upload an image", type=["jpg", "jpeg", "png"])
 
 # -----------------------
-# Filter Preview Gallery
+# Filter Gallery (Grid)
 # -----------------------
-st.subheader("🎞 Choose Your Cinematic Look")
-cols = st.columns(3)
+st.markdown("### 🎞️ Choose Your Cinematic Look")
+cols = st.columns(4)
+
 for i, (name, img) in enumerate(previews.items()):
-    with cols[i % 3]:
-        st.image(img, caption=name.title(), use_container_width=True)
-        if st.button(f"Apply {name.title()}"):
+    col = cols[i % 4]
+    with col:
+        st.image(img, use_container_width=True, caption=None, output_format="PNG", channels="RGB")
+        st.markdown(f"<div class='filter-name'>{name.title()}</div>", unsafe_allow_html=True)
+        if st.button(f"✨ Apply {name.title()}", key=f"btn_{name}"):
             st.session_state["selected_filter"] = name
 
+st.markdown("---")
+
 # -----------------------
-# AI Suggestion + Filter Application
+# Apply Filter + AI Suggestion
 # -----------------------
 if uploaded_file:
     st.markdown("### 🤖 AI Filter Suggestion")
@@ -122,19 +146,21 @@ if uploaded_file:
 
     col1, col2 = st.columns(2)
     with col1:
-        st.image(image, caption="Original", use_container_width=True)
+        st.image(image, caption="Original Image", use_container_width=True)
     with col2:
         selected_filter = st.session_state.get("selected_filter", suggestion)
         result = apply_lut(image, luts[selected_filter])
-        st.image(result, caption=f"Applied: {selected_filter.title()}", use_container_width=True)
+        st.image(result, caption=f"🎬 Applied: {selected_filter.title()}", use_container_width=True)
 
-        # Download output image
+        # Save for download
         output = Image.fromarray(result)
+        buf = BytesIO()
+        output.save(buf, format="PNG")
         st.download_button(
-            "📥 Download Image",
-            data=BytesIO(),
+            "📥 Download Filtered Image",
+            data=buf.getvalue(),
             file_name=f"{selected_filter}_filtered.png",
             mime="image/png",
         )
 else:
-    st.info("Upload an image to get AI-suggested cinematic filters.")
+    st.info("Upload an image to try cinematic filters and AI suggestions.")
