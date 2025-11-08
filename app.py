@@ -143,7 +143,7 @@ def generate_previews(base_image):
 # 🎨 Interface
 # -----------------------
 st.title("🎞️ Movie Filter Studio")
-st.caption("Cinematic filters: Oldboy and Dune (Teal–Orange). High fidelity, filmic texture.")
+st.caption("Cinematic filters: High fidelity, filmic texture.")
 
 base = load_base_preview()
 previews = generate_previews(base)
@@ -159,7 +159,7 @@ for name, img in previews.items():
     i += 1
 
 st.markdown("---")
-filter_choice = st.radio("Or pick a filter:", ["Oldboy", "Dune Teal-Orange"],
+filter_choice = st.radio("Or pick a filter:", ["Oldboy", "Dune(2021)"],
                          index=0 if st.session_state.get("selected_filter", "Oldboy") == "Oldboy" else 1,
                          horizontal=True)
 
