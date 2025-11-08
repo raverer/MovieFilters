@@ -1,5 +1,5 @@
 # ==========================================
-# 🎥 MOVIE FILTER STUDIO (Oldboy + Dune + Grand Budapest)
+# 🎥 MOVIE FILTER STUDIO (Oldboy + Dune + Grand Budapest + Oppenheimer)
 # ==========================================
 import streamlit as st
 import numpy as np
@@ -24,7 +24,7 @@ def apply_cinetone_curve(img, contrast=1.15, pivot=0.45):
 # ==========================================
 def oldboy_fight_scene_effect_hd(img):
     img = img.astype(np.float32) / 255.0
-    shadow_tint = np.array([0.00, 0.06, 0.10])  # added a bit more green tint
+    shadow_tint = np.array([0.00, 0.06, 0.10])
     highlight_tint = np.array([0.08, 0.07, -0.02])
 
     luminance = cv2.cvtColor((img * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
@@ -35,13 +35,11 @@ def oldboy_fight_scene_effect_hd(img):
     img = img + shadow_tint * shadow_mask + highlight_tint * highlight_mask
     img = apply_cinetone_curve(img, contrast=1.25)
 
-    # color balance
     img[..., 2] *= 0.95
     img[..., 1] *= 1.05
     img[..., 0] *= 1.08
     img = np.clip(img, 0, 1)
 
-    # Film grain
     h, w, _ = img.shape
     grain_strength = 0.015
     noise = np.random.normal(0, 1, (h, w, 1)).astype(np.float32)
@@ -49,7 +47,6 @@ def oldboy_fight_scene_effect_hd(img):
     noise = (noise - 0.5) * 2.0
     img = np.clip(img + noise * grain_strength * (0.3 + luminance), 0, 1)
 
-    # Vignette
     kernel_x = cv2.getGaussianKernel(w, w / 1.8)
     kernel_y = cv2.getGaussianKernel(h, h / 1.8)
     vignette = (kernel_y * kernel_x.T)
@@ -57,7 +54,6 @@ def oldboy_fight_scene_effect_hd(img):
     vignette = np.dstack([vignette] * 3)
     img = img * (0.7 + 0.3 * vignette)
 
-    # Sharpen
     img_blur = cv2.GaussianBlur(img, (0, 0), sigmaX=1.2)
     sharp = np.clip(img + (img - img_blur) * 0.8, 0, 1)
 
@@ -70,12 +66,10 @@ def dune_teal_orange_filter(image):
     img = np.array(image).astype(np.float32) / 255.0
     img = np.power(img, 0.95)
 
-    # shadows -> teal
     shadows = np.clip(1.0 - (img * 2.2), 0, 1)
     teal_tint = np.array([0.0, 0.10, 0.26])
     img = img + teal_tint * shadows * 0.35
 
-    # highlights -> orange
     highlights = np.clip((img - 0.5) * 2.0, 0, 1)
     orange_tint = np.array([0.22, 0.12, -0.03])
     img = img + orange_tint * highlights * 0.55
@@ -134,6 +128,40 @@ def apply_grand_budapest_filmic(image):
 
     return (sharp * 255).astype(np.uint8)
 
+# ==========================================
+# 🧪 Oppenheimer Filter
+# ==========================================
+def oppenheimer_filter(image):
+    img = image.astype(np.float32) / 255.0
+    gray = cv2.cvtColor((img * 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
+    img = img * 0.8 + np.expand_dims(gray, 2) * 0.2
+
+    warm_tone = np.array([1.15, 1.05, 0.90])
+    cool_tone = np.array([0.95, 1.00, 1.05])
+    luminance = np.expand_dims(gray, 2)
+    img = img * (cool_tone * (1 - luminance) + warm_tone * luminance)
+
+    pivot, contrast = 0.45, 1.25
+    img = np.clip((img - pivot) * contrast + pivot, 0, 1)
+
+    blur = cv2.GaussianBlur(img, (0, 0), sigmaX=4)
+    img = np.clip(img + blur * 0.05, 0, 1)
+
+    h, w, _ = img.shape
+    noise = np.random.normal(0, 0.015, (h, w, 3)).astype(np.float32)
+    img = np.clip(img + noise, 0, 1)
+
+    X_kernel = cv2.getGaussianKernel(w, w / 1.5)
+    Y_kernel = cv2.getGaussianKernel(h, h / 1.5)
+    vignette = Y_kernel * X_kernel.T
+    vignette = np.dstack([vignette / vignette.max()] * 3)
+    img *= (0.8 + 0.2 * vignette)
+
+    blur_small = cv2.GaussianBlur(img, (0, 0), sigmaX=1.0)
+    img = np.clip(img + (img - blur_small) * 0.8, 0, 1)
+
+    return (img * 255).astype(np.uint8)
+
 # -----------------------
 # Previews
 # -----------------------
@@ -152,7 +180,8 @@ def generate_previews(base_image):
     previews = {
         "Oldboy": oldboy_fight_scene_effect_hd(np.array(base_image)),
         "Dune Teal-Orange": dune_teal_orange_filter(base_image),
-        "Grand Budapest Hotel": apply_grand_budapest_filmic(np.array(base_image))
+        "Grand Budapest Hotel": apply_grand_budapest_filmic(np.array(base_image)),
+        "Oppenheimer": oppenheimer_filter(np.array(base_image))
     }
     return previews
 
@@ -160,14 +189,14 @@ def generate_previews(base_image):
 # UI
 # -----------------------
 st.title("🎞️ Movie Filter Studio")
-st.caption("Cinematic filters: Oldboy, Dune (Teal–Orange), and Grand Budapest Hotel.")
+st.caption("Cinematic filters: Oldboy, Dune (Teal–Orange), Grand Budapest Hotel, and Oppenheimer.")
 
 base = load_base_preview()
 previews = generate_previews(base)
 
 # Preview gallery
 st.markdown("### 🎞 Filter previews")
-cols = st.columns(3)
+cols = st.columns(4)
 for i, (name, img) in enumerate(previews.items()):
     with cols[i]:
         st.image(img, use_column_width=True, caption=name)
@@ -176,7 +205,7 @@ for i, (name, img) in enumerate(previews.items()):
 st.markdown("---")
 filter_choice = st.selectbox(
     "🎬 Choose your cinematic filter:",
-    ["Oldboy", "Dune Teal-Orange", "Grand Budapest Hotel"]
+    ["Oldboy", "Dune Teal-Orange", "Grand Budapest Hotel", "Oppenheimer"]
 )
 
 uploaded_file = st.file_uploader("📸 Upload an image", type=["jpg", "jpeg", "png"])
@@ -196,8 +225,10 @@ if uploaded_file:
             out = oldboy_fight_scene_effect_hd(img_arr)
         elif filter_choice == "Dune Teal-Orange":
             out = dune_teal_orange_filter(img_arr)
-        else:
+        elif filter_choice == "Grand Budapest Hotel":
             out = apply_grand_budapest_filmic(img_arr)
+        else:
+            out = oppenheimer_filter(img_arr)
 
     col1, col2 = st.columns(2)
     with col1:
