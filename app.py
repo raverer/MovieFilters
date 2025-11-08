@@ -47,7 +47,7 @@ def apply_lut(image, lut):
 # Generate filter previews (HD-safe + fallback)
 # -----------------------
 @st.cache_resource
-def generate_previews(luts, base_image_path="preview/base.jpg"):
+def generate_previews(luts, base_image_path="preview/base.png"):
     # ✅ Prefer local neutral image for LUT previews
     if os.path.exists(base_image_path):
         base = Image.open(base_image_path).convert("RGB")
