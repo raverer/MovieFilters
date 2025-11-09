@@ -206,10 +206,10 @@ def load_base_preview(path="preview/base.jpg", resize_to=(500, 350)):
 def generate_previews(base_image):
     previews = {
         "Oldboy": oldboy_fight_scene_effect_hd(np.array(base_image)),
-        "Dune Teal-Orange": dune_teal_orange_filter(base_image),
+        "Dune": dune_teal_orange_filter(base_image),
         "Grand Budapest Hotel": apply_grand_budapest_filmic(np.array(base_image)),
         "Oppenheimer": oppenheimer_filter(np.array(base_image)),
-        "Rivendell Sunrise": rivendell_sunrise(np.array(base_image))
+        "Lord Of The Rings": rivendell_sunrise(np.array(base_image))
     }
     return previews
 
@@ -217,7 +217,7 @@ def generate_previews(base_image):
 # Streamlit UI
 # -----------------------
 st.title("🎞️ Movie Filter Studio")
-st.caption("Cinematic filters: Oldboy, Dune (Teal–Orange), Grand Budapest Hotel, Oppenheimer, and Rivendell Sunrise.")
+st.caption("Cinematic filters")
 
 base = load_base_preview()
 previews = generate_previews(base)
@@ -231,7 +231,7 @@ for i, (name, img) in enumerate(previews.items()):
 st.markdown("---")
 filter_choice = st.selectbox(
     "🎬 Choose your cinematic filter:",
-    ["Oldboy", "Dune Teal-Orange", "Grand Budapest Hotel", "Oppenheimer", "Rivendell Sunrise"]
+    ["Oldboy", "Dune", "Grand Budapest Hotel", "Oppenheimer", "Lord Of The Rings"]
 )
 
 uploaded_file = st.file_uploader("📸 Upload an image", type=["jpg", "jpeg", "png"])
@@ -249,7 +249,7 @@ if uploaded_file:
     with st.spinner(f"Applying {filter_choice}..."):
         if filter_choice == "Oldboy":
             out = oldboy_fight_scene_effect_hd(img_arr)
-        elif filter_choice == "Dune Teal-Orange":
+        elif filter_choice == "Dune":
             out = dune_teal_orange_filter(img_arr)
         elif filter_choice == "Grand Budapest Hotel":
             out = apply_grand_budapest_filmic(img_arr)
