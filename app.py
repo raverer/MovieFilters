@@ -1,11 +1,11 @@
 # ==========================================
-# 🎥 MOVIE FILTER STUDIO (Oldboy + Dune + Grand Budapest + Oppenheimer)
+# 🎥 MOVIE FILTER STUDIO v3.0_final_base
+# Oldboy + Dune + Grand Budapest + Oppenheimer + Rivendell Sunrise
 # ==========================================
 import streamlit as st
 import numpy as np
 from PIL import Image
 import cv2
-import io
 import os
 import requests
 from io import BytesIO
@@ -20,7 +20,7 @@ def apply_cinetone_curve(img, contrast=1.15, pivot=0.45):
     return np.clip((img - pivot) * contrast + pivot, 0, 1)
 
 # ==========================================
-# 🎬 Oldboy Filter (green-tinted version)
+# 🎬 Oldboy Filter
 # ==========================================
 def oldboy_fight_scene_effect_hd(img):
     img = img.astype(np.float32) / 255.0
@@ -56,7 +56,6 @@ def oldboy_fight_scene_effect_hd(img):
 
     img_blur = cv2.GaussianBlur(img, (0, 0), sigmaX=1.2)
     sharp = np.clip(img + (img - img_blur) * 0.8, 0, 1)
-
     return (sharp * 255).astype(np.uint8)
 
 # ==========================================
@@ -125,11 +124,10 @@ def apply_grand_budapest_filmic(image):
 
     blur = cv2.GaussianBlur(img, (0, 0), 1.0)
     sharp = np.clip(img + (img - blur) * 0.5, 0, 1)
-
     return (sharp * 255).astype(np.uint8)
 
 # ==========================================
-# 🧪 Oppenheimer Filter
+# ⚛️ Oppenheimer Filter
 # ==========================================
 def oppenheimer_filter(image):
     img = image.astype(np.float32) / 255.0
@@ -141,8 +139,7 @@ def oppenheimer_filter(image):
     luminance = np.expand_dims(gray, 2)
     img = img * (cool_tone * (1 - luminance) + warm_tone * luminance)
 
-    pivot, contrast = 0.45, 1.25
-    img = np.clip((img - pivot) * contrast + pivot, 0, 1)
+    img = apply_cinetone_curve(img, contrast=1.25, pivot=0.45)
 
     blur = cv2.GaussianBlur(img, (0, 0), sigmaX=4)
     img = np.clip(img + blur * 0.05, 0, 1)
@@ -159,11 +156,41 @@ def oppenheimer_filter(image):
 
     blur_small = cv2.GaussianBlur(img, (0, 0), sigmaX=1.0)
     img = np.clip(img + (img - blur_small) * 0.8, 0, 1)
-
     return (img * 255).astype(np.uint8)
 
+# ==========================================
+# 🌅 Rivendell Sunrise Filter
+# ==========================================
+def rivendell_sunrise(image):
+    img = image.astype(np.float32) / 255.0
+    img = np.clip(img ** 0.95, 0, 1)
+    warm_tone = np.array([1.10, 1.03, 0.92])
+    img *= warm_tone
+
+    soft_blend = np.full_like(img, [1.05, 0.97, 0.95])
+    luminance = np.expand_dims(cv2.cvtColor((img*255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)/255.0, 2)
+    img = img * (1 - 0.25 * luminance) + soft_blend * (0.25 * luminance)
+
+    blur = cv2.GaussianBlur(img, (0, 0), sigmaX=3)
+    img = np.clip(img + blur * 0.12, 0, 1)
+
+    img = np.clip(img * 0.96 + 0.04, 0, 1)
+    shadow_lift = np.power(img, 0.9)
+    img = np.clip(shadow_lift, 0, 1)
+
+    h, w, _ = img.shape
+    X_kernel = cv2.getGaussianKernel(w, w / 1.8)
+    Y_kernel = cv2.getGaussianKernel(h, h / 1.8)
+    vignette = Y_kernel * X_kernel.T
+    vignette = np.dstack([vignette / vignette.max()] * 3)
+    img *= (0.9 + 0.1 * vignette)
+
+    blur_small = cv2.GaussianBlur(img, (0, 0), sigmaX=1.0)
+    sharp = np.clip(img + (img - blur_small) * 0.45, 0, 1)
+    return (sharp * 255).astype(np.uint8)
+
 # -----------------------
-# Previews
+# Preview setup
 # -----------------------
 @st.cache_resource
 def load_base_preview(path="preview/base.jpg", resize_to=(500, 350)):
@@ -181,31 +208,30 @@ def generate_previews(base_image):
         "Oldboy": oldboy_fight_scene_effect_hd(np.array(base_image)),
         "Dune Teal-Orange": dune_teal_orange_filter(base_image),
         "Grand Budapest Hotel": apply_grand_budapest_filmic(np.array(base_image)),
-        "Oppenheimer": oppenheimer_filter(np.array(base_image))
+        "Oppenheimer": oppenheimer_filter(np.array(base_image)),
+        "Rivendell Sunrise": rivendell_sunrise(np.array(base_image))
     }
     return previews
 
 # -----------------------
-# UI
+# Streamlit UI
 # -----------------------
 st.title("🎞️ Movie Filter Studio")
-st.caption("Cinematic filters: Oldboy, Dune (Teal–Orange), Grand Budapest Hotel, and Oppenheimer.")
+st.caption("Cinematic filters: Oldboy, Dune (Teal–Orange), Grand Budapest Hotel, Oppenheimer, and Rivendell Sunrise.")
 
 base = load_base_preview()
 previews = generate_previews(base)
 
-# Preview gallery
 st.markdown("### 🎞 Filter previews")
-cols = st.columns(4)
+cols = st.columns(5)
 for i, (name, img) in enumerate(previews.items()):
     with cols[i]:
         st.image(img, use_column_width=True, caption=name)
 
-# Dropdown menu
 st.markdown("---")
 filter_choice = st.selectbox(
     "🎬 Choose your cinematic filter:",
-    ["Oldboy", "Dune Teal-Orange", "Grand Budapest Hotel", "Oppenheimer"]
+    ["Oldboy", "Dune Teal-Orange", "Grand Budapest Hotel", "Oppenheimer", "Rivendell Sunrise"]
 )
 
 uploaded_file = st.file_uploader("📸 Upload an image", type=["jpg", "jpeg", "png"])
@@ -227,8 +253,10 @@ if uploaded_file:
             out = dune_teal_orange_filter(img_arr)
         elif filter_choice == "Grand Budapest Hotel":
             out = apply_grand_budapest_filmic(img_arr)
-        else:
+        elif filter_choice == "Oppenheimer":
             out = oppenheimer_filter(img_arr)
+        else:
+            out = rivendell_sunrise(img_arr)
 
     col1, col2 = st.columns(2)
     with col1:
