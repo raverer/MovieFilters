@@ -1,6 +1,6 @@
 # ==========================================
 # 🎥 MOVIE FILTER STUDIO v3.0_final_base
-# Oldboy + Dune + Grand Budapest + Oppenheimer + Rivendell Sunrise
+# Oldboy + Dune + Grand Budapest + Oppenheimer + Lord Of The Rings
 # ==========================================
 import streamlit as st
 import numpy as np
